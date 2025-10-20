@@ -84,9 +84,6 @@ class _EditUserWidget extends State<EditDeviceWidget> {
       } else {
         String errorText;
         switch (result['statusCode']) {
-          // case 401:
-          //   errorText = 'ورود ناموفق: نام کاربری یا رمز عبور نادرست است';
-          //   break;
           case 408:
             errorText =
                 'خطای اتصال به سرور. لطفا چند لحظه بعد مجدد تلاش فرمایید';

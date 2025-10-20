@@ -5,6 +5,7 @@ import 'package:user_panel/widgets/custom_input_field.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 //import 'package:user_panel/widgets/custom_button.dart';
 import 'package:user_panel/services/api_service.dart';
+import 'package:user_panel/services/auth_manager.dart';
 
 class EditDeviceScreen extends StatefulWidget {
   const EditDeviceScreen({super.key});
@@ -27,29 +28,52 @@ class _EditUserWidget extends State<EditDeviceScreen> {
   void initState() {
     super.initState();
     _loadDeviceData();
+    _deviceNameController = TextEditingController(text: '');
   }
 
   Future<void> _loadDeviceData() async {
     final prefs = await SharedPreferences.getInstance();
-    final selectedDeviceIdentifier =
-        prefs.getString('selected_device_identifier');
+    final selectedDeviceIdentifier = prefs.getString(
+      'selected_device_identifier',
+    );
 
+    // if (selectedDeviceIdentifier == null) {
+    //   _showDialog('خطا', 'لطفا یک دستگاه انتخاب کنید و مجدد تلاش کنید');
+    //   if (mounted) Navigator.of(context).pop();
+    //   return;
+    // }
     if (selectedDeviceIdentifier == null) {
-      _showDialog('خطا', 'لطفا یک دستگاه انتخاب کنید و مجدد تلاش کنید');
-      if (mounted) Navigator.of(context).pop();
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('خطا'),
+          content: Text('لطفا یک دستگاه انتخاب کنید و مجدد تلاش کنید'),
+          actions: [
+            TextButton(
+              child: const Text('باشه'),
+              onPressed: () {
+                Navigator.of(context).pop(); // بستن دیالوگ
+                Navigator.of(context).maybePop(); // بازگشت به صفحه قبلی
+              },
+            ),
+          ],
+        ),
+      );
       return;
     }
 
-    final cached =
-        await DeviceDatabase.getDevice(int.parse(selectedDeviceIdentifier));
+    final cached = await DeviceDatabase.getDevice(
+      int.parse(selectedDeviceIdentifier),
+    );
 
     if (cached != null) {
       _deviceInfo = cached;
     } else {
-      final result = await ApiService.postRequest(
-        'device_information',
-        {'identifier': selectedDeviceIdentifier},
-      );
+      final result = await ApiService.postRequest('device_information', {
+        'identifier': selectedDeviceIdentifier,
+      });
 
       if (result['statusCode'] == 200 &&
           result['data'] != null &&
@@ -63,8 +87,9 @@ class _EditUserWidget extends State<EditDeviceScreen> {
     }
 
     setState(() {
-      _deviceNameController =
-          TextEditingController(text: _deviceInfo?.deviceName ?? '');
+      _deviceNameController = TextEditingController(
+        text: _deviceInfo?.deviceName ?? '',
+      );
       _isLoading = false;
     });
   }
@@ -148,6 +173,10 @@ class _EditUserWidget extends State<EditDeviceScreen> {
           case 503:
             errorText = 'لطفا از اتصال به اینترنت اطمینان حاصل فرمایید';
             break;
+          case 401:
+            AuthManager.logoutAndRedirect(context);
+            errorText = 'لطفا مجدد وارد شوید';
+            break;
           default:
             errorText = 'خطای ناشناخته';
         }
@@ -170,6 +199,11 @@ class _EditUserWidget extends State<EditDeviceScreen> {
         break;
       case 503:
         errorText = 'لطفا از اتصال به اینترنت اطمینان حاصل فرمایید';
+        break;
+      case 401:
+        AuthManager.logoutAndRedirect(context);
+        errorText = 'لطفا مجدد وارد شوید';
+
         break;
       default:
         errorText = 'خطای ناشناخته';
@@ -244,15 +278,17 @@ class _EditUserWidget extends State<EditDeviceScreen> {
                             child: const Text('انصراف'),
                           ),
                           ElevatedButton(
-                            onPressed:
-                                _saveIsSubmitting ? null : _submitEditDevice,
+                            onPressed: _saveIsSubmitting
+                                ? null
+                                : _submitEditDevice,
                             child: _saveIsSubmitting
                                 ? const SizedBox(
                                     width: 24,
                                     height: 24,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.0,
-                                    ))
+                                    ),
+                                  )
                                 : const Text('ثبت'),
                           ),
                           // CustomButton(

@@ -19,21 +19,23 @@ class MenuGridItem extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(8),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: Icon(
-                (menuItemIcon[item]),
-                color: Theme.of(context).colorScheme.onPrimary,
-                size: 30,
+            Flexible(
+              flex: 2,
+              child: CircleAvatar(
+                radius: 30,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                child: Icon(
+                  menuItemIcon[item],
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  size: 30,
+                ),
               ),
             ),
-            const SizedBox(
-              height: 6,
-            ),
+            const SizedBox(height: 8),
             Flexible(
+              flex: 1,
               child: Text(
                 menuItemName[item].toString(),
                 textAlign: TextAlign.center,

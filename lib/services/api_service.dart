@@ -10,7 +10,9 @@ class ApiService {
   static const String baseUrl = 'http://78.38.35.193:3000/user/';
 
   static Future<Map<String, dynamic>> login(
-      String endpoint, Map<String, dynamic> body) async {
+    String endpoint,
+    Map<String, dynamic> body,
+  ) async {
     try {
       final response = await http
           .post(
@@ -24,7 +26,7 @@ class ApiService {
         return {
           'success': true,
           'statusCode': 200,
-          'data': jsonDecode(response.body)
+          'data': jsonDecode(response.body),
         };
       } else {
         return {
@@ -34,17 +36,9 @@ class ApiService {
         };
       }
     } on TimeoutException {
-      return {
-        'success': false,
-        'statusCode': 408,
-        'error': 'timeout',
-      };
+      return {'success': false, 'statusCode': 408, 'error': 'timeout'};
     } on SocketException {
-      return {
-        'success': false,
-        'statusCode': 503,
-        'error': 'network_error',
-      };
+      return {'success': false, 'statusCode': 503, 'error': 'network_error'};
     } catch (e) {
       return {
         'success': false,
@@ -55,27 +49,32 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getRequest(String endpoint) async {
+  static Future<Map<String, dynamic>> getRequest(
+    String endpoint,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
     //print('request start');
     //print(token);
     try {
-      final response = await http.get(
-        Uri.parse(baseUrl + endpoint),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(
+            Uri.parse(baseUrl + endpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
       //print(response.statusCode);
       //print(response.body);
+
 
       if (response.statusCode == 200) {
         return {
           'success': true,
           'statusCode': 200,
-          'data': jsonDecode(response.body)
+          'data': jsonDecode(response.body),
         };
       } else {
         return {
@@ -85,17 +84,9 @@ class ApiService {
         };
       }
     } on TimeoutException {
-      return {
-        'success': false,
-        'statusCode': 408,
-        'error': 'timeout',
-      };
+      return {'success': false, 'statusCode': 408, 'error': 'timeout'};
     } on SocketException {
-      return {
-        'success': false,
-        'statusCode': 503,
-        'error': 'network_error',
-      };
+      return {'success': false, 'statusCode': 503, 'error': 'network_error'};
     } catch (e) {
       return {
         'success': false,
@@ -124,12 +115,15 @@ class ApiService {
             body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 10));
+      print(response.statusCode);
+      print(response.body);
+
 
       if (response.statusCode == 200) {
         return {
           'success': true,
           'statusCode': 200,
-          'data': jsonDecode(response.body)
+          'data': jsonDecode(response.body),
         };
       } else {
         return {
@@ -139,17 +133,9 @@ class ApiService {
         };
       }
     } on TimeoutException {
-      return {
-        'success': false,
-        'statusCode': 408,
-        'error': 'timeout',
-      };
+      return {'success': false, 'statusCode': 408, 'error': 'timeout'};
     } on SocketException {
-      return {
-        'success': false,
-        'statusCode': 503,
-        'error': 'network_error',
-      };
+      return {'success': false, 'statusCode': 503, 'error': 'network_error'};
     } catch (e) {
       return {
         'success': false,

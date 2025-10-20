@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:user_panel/models/Information_model.dart';
 import 'package:user_panel/services/api_service.dart';
+import 'package:user_panel/services/auth_manager.dart';
 import 'package:user_panel/models/device.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:user_panel/services/sqlite_database.dart';
+import 'package:user_panel/widgets/custom_button.dart';
 
 class UserDevicesScreen extends StatefulWidget {
   const UserDevicesScreen({super.key});
@@ -30,9 +34,44 @@ class _UserDevicesScreenState extends State<UserDevicesScreen> {
     });
   }
 
-  Future<void> _saveSelectedIdentifier(String identifier) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('selected_device_identifier', identifier);
+  void _saveSelectedIdentifier() async {
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('selected_device_identifier', selectedIdentifier!);
+
+      final result = await ApiService.postRequest('device_information', {
+        'identifier': selectedIdentifier,
+      });
+      if (result['statusCode'] == 401) {
+        AuthManager.logoutAndRedirect(context);
+      }
+      dynamic rows;
+      rows = result['data'];
+      final centralData = DeviceInfo.fromJson(rows);
+      await DeviceDatabase.insertDevice(centralData);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('دستگاه ذخیره شد')));
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('خطا: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   Future<void> _fetchDevicesFromBackend() async {
@@ -48,15 +87,19 @@ class _UserDevicesScreenState extends State<UserDevicesScreen> {
         final List<dynamic> listData = result['data'];
         setState(() {
           devices = listData
-              .map<Device>((device) => Device(
-                    name: device["device_name"],
-                    identifier: device['identifier'].toString(),
-                    registerDate: device['start_date'].toString(),
-                  ))
+              .map<Device>(
+                (device) => Device(
+                  name: device["device_name"],
+                  identifier: device['identifier'].toString(),
+                  registerDate: device['start_date'].toString(),
+                ),
+              )
               .toList();
         });
       } else {
-        // می‌تونی خطاهای بیشتر هم اینجا مدیریت کنی
+        if (result['statusCode'] == 401) {
+          AuthManager.logoutAndRedirect(context);
+        }
         _showDialog('خطا', 'دریافت دستگاه‌ها با مشکل مواجه شد.');
       }
     } catch (e) {
@@ -91,121 +134,135 @@ class _UserDevicesScreenState extends State<UserDevicesScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : devices.isEmpty
-              ? const Center(child: Text('هیچ دستگاهی پیدا نشد'))
-              : Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: devices.length,
-                        itemBuilder: (context, index) {
-                          final device = devices[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            child: InkWell(
-                              onTap: () {
+          ? const Center(child: Text('هیچ دستگاهی پیدا نشد'))
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: devices.length,
+                    itemBuilder: (context, index) {
+                      final device = devices[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              selectedIdentifier = devices[index].identifier;
+                            });
+                          },
+                          child: ListTile(
+                            title: Text(
+                              device.name.isNotEmpty ? device.name : 'بدون نام',
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('شناسه: ${device.identifier}'),
+                                Text('تاریخ ثبت‌نام: ${device.registerDate}'),
+                              ],
+                            ),
+                            leading: Radio<String>(
+                              value: device.identifier,
+                              groupValue: selectedIdentifier,
+                              onChanged: (value) {
                                 setState(() {
-                                  selectedIdentifier =
-                                      devices[index].identifier;
+                                  selectedIdentifier = value;
                                 });
                               },
-                              child: ListTile(
-                                title: Text(device.name.isNotEmpty
-                                    ? device.name
-                                    : 'بدون نام'),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('شناسه: ${device.identifier}'),
-                                    Text(
-                                        'تاریخ ثبت‌نام: ${device.registerDate}'),
-                                  ],
-                                ),
-                                leading: Radio<String>(
-                                  value: device.identifier,
-                                  groupValue: selectedIdentifier,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedIdentifier = value;
-                                    });
-                                  },
-                                ),
-                                // trailing حذف شد (آیکون ویرایش)
-                              ),
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                    const Divider(),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: selectedIdentifier == null || _isSaving
-                                  ? null
-                                  : () async {
-                                      setState(() {
-                                        _isSaving = true;
-                                      });
-
-                                      try {
-                                        await _saveSelectedIdentifier(
-                                            selectedIdentifier!);
-
-                                        if (!mounted) return;
-
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text('دستگاه ذخیره شد'),
-                                          ),
-                                        );
-                                        Navigator.pop(context, true);
-                                      } catch (e) {
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(content: Text('خطا: $e')),
-                                          );
-                                        }
-                                      } finally {
-                                        if (mounted) {
-                                          setState(() {
-                                            _isSaving = false;
-                                          });
-                                        }
-                                      }
-                                    },
-                              child: _isSaving
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Text('ثبت'),
-                            ),
+                            // trailing حذف شد (آیکون ویرایش)
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {
-                                Navigator.pop(context, false);
-                              },
-                              child: const Text('لغو'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('انصراف'),
+                      ),
+                      CustomButton(
+                        onPressed:_saveSelectedIdentifier,
+                        isSubmitting: _isSaving,
+                        label: 'ثبت',
+                      ),
+                      // Expanded(
+                      //   child: OutlinedButton(
+                      //     onPressed: () {
+                      //       Navigator.pop(context, false);
+                      //     },
+                      //     child: const Text('لغو'),
+                      //   ),
+                      // ),
+                      // const SizedBox(width: 12),
+
+                      // Expanded(
+                      //   child: ElevatedButton(
+                      //     onPressed: selectedIdentifier == null || _isSaving
+                      //         ? null
+                      //         : () async {
+                      //             setState(() {
+                      //               _isSaving = true;
+                      //             });
+
+                      //             try {
+                      //               // await _saveSelectedIdentifier(
+                      //               //   selectedIdentifier!,
+                      //               // );
+
+                      //               if (!mounted) return;
+
+                      //               ScaffoldMessenger.of(context).showSnackBar(
+                      //                 const SnackBar(
+                      //                   content: Text('دستگاه ذخیره شد'),
+                      //                 ),
+                      //               );
+                      //               Navigator.pop(context, true);
+                      //             } catch (e) {
+                      //               if (mounted) {
+                      //                 ScaffoldMessenger.of(
+                      //                   context,
+                      //                 ).showSnackBar(
+                      //                   SnackBar(content: Text('خطا: $e')),
+                      //                 );
+                      //               }
+                      //             } finally {
+                      //               if (mounted) {
+                      //                 setState(() {
+                      //                   _isSaving = false;
+                      //                 });
+                      //               }
+                      //             }
+                      //           },
+                      //     child: _isSaving
+                      //         ? const SizedBox(
+                      //             height: 20,
+                      //             width: 20,
+                      //             child: CircularProgressIndicator(
+                      //               strokeWidth: 2,
+                      //               color: Colors.white,
+                      //             ),
+                      //           )
+                      //         : const Text('ثبت'),
+                      //   ),
+                      // ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

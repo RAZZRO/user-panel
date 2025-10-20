@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart'; // برای Clipboard
 
- import 'package:user_panel/widgets/custom_input_field.dart';
- import 'package:user_panel/models/user_model.dart';
- import 'package:user_panel/widgets/custom_button.dart';
- import 'package:user_panel/services/api_service.dart';
+import 'package:user_panel/widgets/custom_input_field.dart';
+import 'package:user_panel/models/user_model.dart';
+import 'package:user_panel/widgets/custom_button.dart';
+import 'package:user_panel/services/api_service.dart';
 
 class EditUserWidget extends StatefulWidget {
   const EditUserWidget({super.key, required this.user});
@@ -78,10 +78,6 @@ class _EditUserWidget extends State<EditUserWidget> {
       final result = await ApiService.postRequest(url, body);
       setState(() => _saveIsSubmitting = false);
 
-      print("++++++++++++++++++++++++++++++++++++++++");
-      print(result);
-      print(result['success']);
-
       if (result['success']) {
         await showDialog(
           context: context,
@@ -101,8 +97,9 @@ class _EditUserWidget extends State<EditUserWidget> {
 
         // بعد از بسته شدن dialog، این اجرا میشه:
         if (mounted) {
-          Navigator.of(context)
-              .pop(true); // صفحه ویرایش رو می‌بنده و true برمی‌گردونه
+          Navigator.of(
+            context,
+          ).pop(true); // صفحه ویرایش رو می‌بنده و true برمی‌گردونه
         }
       } else {
         _showDialog('خطا', result.toString());
@@ -132,7 +129,7 @@ class _EditUserWidget extends State<EditUserWidget> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
-          )
+          ),
           // ElevatedButton(
           //   onPressed: () => Navigator.of(context).pop(true),
           //   style: ElevatedButton.styleFrom(
@@ -148,16 +145,11 @@ class _EditUserWidget extends State<EditUserWidget> {
       setState(() => _deleteIsSubmitting = true);
 
       const url = 'http://10.0.2.2:3000/admin/delete_user';
-      final body = {
-        'nationalCode': widget.user.nationalCode,
-      };
+      final body = {'nationalCode': widget.user.nationalCode};
 
       final result = await ApiService.postRequest(url, body);
       setState(() => _deleteIsSubmitting = false);
 
-      print("++++++++++++++++++++++++++++++++++++++++");
-      print(result);
-      print(result['success']);
 
       if (result['success']) {
         await showDialog(
@@ -178,8 +170,9 @@ class _EditUserWidget extends State<EditUserWidget> {
 
         // بعد از بسته شدن dialog، این اجرا میشه:
         if (mounted) {
-          Navigator.of(context)
-              .pop(true); // صفحه ویرایش رو می‌بنده و true برمی‌گردونه
+          Navigator.of(
+            context,
+          ).pop(true); // صفحه ویرایش رو می‌بنده و true برمی‌گردونه
         }
       } else {
         _showDialog('خطا', result.toString());
@@ -209,7 +202,7 @@ class _EditUserWidget extends State<EditUserWidget> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
-          )
+          ),
           // ElevatedButton(
           //   onPressed: () => Navigator.of(context).pop(true),
           //   style: ElevatedButton.styleFrom(
@@ -225,16 +218,10 @@ class _EditUserWidget extends State<EditUserWidget> {
       setState(() => _passIsSubmitting = true);
 
       const url = 'http://10.0.2.2:3000/admin/reset_password';
-      final body = {
-        'nationalCode': widget.user.nationalCode,
-      };
+      final body = {'nationalCode': widget.user.nationalCode};
 
       final result = await ApiService.postRequest(url, body);
       setState(() => _passIsSubmitting = false);
-
-      print("++++++++++++++++++++++++++++++++++++++++");
-      print(result);
-      print(result['success']);
 
       if (result['success']) {
         final dataMap = json.decode(result['data']); // تبدیل رشته به Map
@@ -252,9 +239,9 @@ class _EditUserWidget extends State<EditUserWidget> {
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: message));
                   Navigator.of(context).pop(); // بستن دیالوگ
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('متن کپی شد')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('متن کپی شد')));
                 },
                 child: const Text('کپی'),
               ),
@@ -264,8 +251,9 @@ class _EditUserWidget extends State<EditUserWidget> {
 
         // بعد از بسته شدن dialog، این اجرا میشه:
         if (mounted) {
-          Navigator.of(context)
-              .pop(true); // صفحه ویرایش رو می‌بنده و true برمی‌گردونه
+          Navigator.of(
+            context,
+          ).pop(true); // صفحه ویرایش رو می‌بنده و true برمی‌گردونه
         }
       } else {
         _showDialog('خطا', result.toString());
@@ -301,8 +289,9 @@ class _EditUserWidget extends State<EditUserWidget> {
             children: [
               const SizedBox(height: 20.0),
               CustomInputField(
-                controller:
-                    TextEditingController(text: widget.user.nationalCode),
+                controller: TextEditingController(
+                  text: widget.user.nationalCode,
+                ),
                 label: 'کد ملی',
                 isEditable: false,
                 textAlign: TextAlign.center,

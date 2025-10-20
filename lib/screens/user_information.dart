@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_panel/models/user_model.dart';
 import 'package:user_panel/widgets/custom_button.dart';
 import 'package:user_panel/services/api_service.dart';
+import 'package:user_panel/services/auth_manager.dart';
 
 class EditUserScreen extends StatefulWidget {
   const EditUserScreen({super.key});
@@ -105,14 +106,16 @@ class _EditUserWidget extends State<EditUserScreen> {
           case 503:
             errorText = 'لطفا از اتصال به اینترنت اطمینان حاصل فرمایید';
             break;
+          case 401:
+            AuthManager.logoutAndRedirect(context);
+            errorText = 'لطفا مجدد وارد شوید';
+            break;
           default:
             errorText = 'خطای ناشناخته';
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorText),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorText)));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -221,6 +224,10 @@ class _EditUserWidget extends State<EditUserScreen> {
           case 503:
             errorText = 'لطفا از اتصال به اینترنت اطمینان حاصل فرمایید';
             break;
+          case 401:
+            await AuthManager.logoutAndRedirect(context);
+            errorText = 'لطفا مجدد وارد شوید';
+            break;
           default:
             errorText = 'خطای ناشناخته';
         }
@@ -268,7 +275,7 @@ class _EditUserWidget extends State<EditUserScreen> {
       } else {
         String errorText;
         switch (result['statusCode']) {
-          case 401:
+          case 402:
             errorText = 'رمز عبور فعلی اشتباه است';
             break;
           case 408:
@@ -281,6 +288,10 @@ class _EditUserWidget extends State<EditUserScreen> {
             break;
           case 503:
             errorText = 'لطفا از اتصال به اینترنت اطمینان حاصل فرمایید';
+            break;
+          case 401:
+            await AuthManager.logoutAndRedirect(context);
+            errorText = 'لطفا مجدد وارد شوید';
             break;
           default:
             errorText = 'خطای ناشناخته';
@@ -327,8 +338,9 @@ class _EditUserWidget extends State<EditUserScreen> {
                     children: [
                       const SizedBox(height: 20.0),
                       CustomInputField(
-                        controller:
-                            TextEditingController(text: _user!.nationalCode),
+                        controller: TextEditingController(
+                          text: _user!.nationalCode,
+                        ),
                         label: 'کد ملی',
                         isEditable: false,
                         textAlign: TextAlign.center,
