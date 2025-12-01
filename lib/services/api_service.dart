@@ -49,9 +49,7 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getRequest(
-    String endpoint,
-  ) async {
+  static Future<Map<String, dynamic>> getRequest(String endpoint) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
     //print('request start');
@@ -68,7 +66,6 @@ class ApiService {
           .timeout(const Duration(seconds: 10));
       //print(response.statusCode);
       //print(response.body);
-
 
       if (response.statusCode == 200) {
         return {
@@ -117,7 +114,6 @@ class ApiService {
           .timeout(const Duration(seconds: 10));
       print(response.statusCode);
       print(response.body);
-
 
       if (response.statusCode == 200) {
         return {

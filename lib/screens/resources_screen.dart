@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_panel/models/Information_model.dart';
 import 'package:user_panel/services/api_service.dart';
 import 'package:user_panel/services/sqlite_database.dart';
+import 'package:shamsi_date/shamsi_date.dart';
+import 'package:user_panel/services/auth_manager.dart';
 
 class ResourcesScreen extends StatefulWidget {
   const ResourcesScreen({super.key});
@@ -19,10 +20,6 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
   List<RelayData> _relayList = [];
   List<double> tanks = [];
   List<bool> relays = [];
-
-  // // شبیه‌سازی داده‌ها
-  // = [75, 15]; // درصد مخزن 1 و 2
-  // List<bool> relays = [true, false, true, false, true]; // وضعیت رله‌ها
 
   /// رنگ مخزن بر اساس درصد
   Color getTankColor(double level) {
@@ -40,48 +37,55 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
         : const Color.fromARGB(255, 216, 216, 23);
   }
 
-  /// ویجت دایره‌ای مخزن با انیمیشن
+  /// ویجت دایره‌ای مخزن با انیمیشن و تراز وسط
   Widget _buildTankCircle(String name, double level) {
     final color = getTankColor(level);
-    return Column(
-      children: [
-        TweenAnimationBuilder<double>(
-          tween: Tween<double>(begin: 0, end: level / 100),
-          duration: const Duration(seconds: 2),
-          builder: (context, value, child) {
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 100,
-                  height: 100,
-                  child: CircularProgressIndicator(
-                    value: value,
-                    strokeWidth: 12,
-                    color: color,
-                    backgroundColor: color.withOpacity(0.3),
+    return SizedBox(
+      width: 120,
+      height: 160,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center, // وسط عمودی
+        children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: level / 100),
+            duration: const Duration(seconds: 2),
+            builder: (context, value, child) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 100,
+                    height: 100,
+                    child: CircularProgressIndicator(
+                      value: value,
+                      strokeWidth: 12,
+                      color: color,
+                      backgroundColor: color.withOpacity(0.3),
+                    ),
                   ),
-                ),
-                Text(
-                  "${(value * 100).toStringAsFixed(0)}%",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                  Text(
+                    "${(value * 100).toStringAsFixed(0)}%",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(name, style: const TextStyle(fontSize: 16)),
-      ],
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          Text(name, style: const TextStyle(fontSize: 16)),
+        ],
+      ),
     );
   }
 
   /// ویجت رله
   Widget _buildRelayTile(int index) {
     return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
         leading: Icon(
           Icons.lightbulb,
@@ -100,11 +104,9 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
     );
   }
 
+  /// دریافت و ذخیره اطلاعات جدید دستگاه
   Future<void> _fetchAndSaveDeviceData() async {
-    setState(() {
-      _isLoading = true;
-    });
-    print("fetch");
+    setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
     final selectedDeviceIdentifier = prefs.getString(
       'selected_device_identifier',
@@ -115,40 +117,57 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
       _showDialog(
         context,
         'خطا',
-        'لطفا یک دستگاه انتخاب کنید و مجدد تلاش کنید',
+        'لطفاً یک دستگاه انتخاب کنید و مجدد تلاش کنید.',
       );
       setState(() => _isLoading = false);
       return;
     }
 
-    final result = await ApiService.postRequest('stack_information', {
-      'deviceId': selectedDeviceIdentifier,
-    });
+    final now = DateTime.now();
+    final miladiDate =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final jalaliNow = now.toJalali();
+    final shamsiTime =
+        "${jalaliNow.hour.toString().padLeft(2, '0')}:${jalaliNow.minute.toString().padLeft(2, '0')}:${jalaliNow.second.toString().padLeft(2, '0')}";
 
-    print(result);
+    try {
+      final result = await ApiService.postRequest('stack_information', {
+        'deviceId': selectedDeviceIdentifier,
+        'timeStampDate': miladiDate,
+        'timeStampClock': shamsiTime,
+      });
 
-    if (result['data'] is List) {
-      final data = result['data'] as List;
-      for (final row in data) {
-        if (row['stack_id'] == null) continue;
-        final stack = StackData.fromJson(row);
-        print('StackData.fromJson(row)');
-        await DeviceDatabase.insertStack(stack);
-        print('insertStack(stack)');
+      if (result['success'] == true) {
+        if (result['data'] is List) {
+          final data = result['data'] as List;
+          for (final row in data) {
+            if (row['stack_id'] != null) {
+              final stack = StackData.fromJson(row);
+              await DeviceDatabase.insertStack(stack);
+            }
+            if (row['relay_id'] != null) {
+              final relay = RelayData.fromJson(row);
+              await DeviceDatabase.insertRelay(relay);
+            }
+          }
+        }
 
-        if (row['relay_id'] == null) continue;
-        final relay = RelayData.fromJson(row);
-        print('RelayData.fromJson(row)');
-        await DeviceDatabase.insertRelay(relay);
-        print('insertRelay(relay)');
+        await _loadStoredData();
+      } else {
+        if (!mounted) return;
+        if (result['statusCode'] == 401) {
+          AuthManager.logoutAndRedirect(context);
+        }
+        _showDialog(context, 'خطا', 'دریافت داده جدید با مشکل مواجه شد.');
       }
+    } catch (e) {
+      if (!mounted) return;
+      _showDialog(context, 'خطا', 'خطا در ارتباط با سرور: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
-
-    await _loadStoredData();
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   void _showDialog(BuildContext context, String title, String message) {
@@ -177,55 +196,88 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
     final stackList = await DeviceDatabase.getStackData(
       int.parse(selectedDeviceIdentifier),
     );
-    stackList.sort(
-      (a, b) => (a.tankId.toString()).compareTo(b.tankId.toString()),
-    );
-
     final relayList = await DeviceDatabase.getRelayData(
       int.parse(selectedDeviceIdentifier),
     );
-    relayList.sort(
-      (a, b) => (a.relayId.toString()).compareTo(b.relayId.toString()),
+
+    stackList.sort(
+      (a, b) => a.tankId.toString().compareTo(b.tankId.toString()),
     );
-
-    // استخراج درصد مخازن
-    final loadedTanks = stackList.map((s) {
-      // فرض بر این است که در StackData فیلد waterLevel یا مشابه آن داری
-      // اگر فیلد دیگری است (مثل wLevel)، همان را بگذار
-      return s.wLevel?.toDouble() ?? 0.0;
-    }).toList();
-
-    // استخراج وضعیت رله‌ها
-    final loadedRelays = relayList.map((r) {
-      // فرض بر این است که در RelayData فیلد state از نوع bool داری
-      return r.state ?? false;
-    }).toList();
+    relayList.sort(
+      (a, b) => a.relayId.toString().compareTo(b.relayId.toString()),
+    );
 
     setState(() {
       _stackList = stackList;
       _relayList = relayList;
-      tanks = loadedTanks;
-      relays = loadedRelays;
+      tanks = stackList.map((s) => s.wLevel?.toDouble() ?? 0.0).toList();
+      relays = relayList.map((r) => r.state ?? false).toList();
     });
-
-    print("=== Irrigation Data loaded ===");
-    for (var item in stackList) {
-      print(item.toMap());
-    }
-    for (var item in relayList) {
-      print(item.toMap());
-    }
   }
 
-  /// ارسال داده‌ها به سرور (شبیه‌سازی)
-  void _submitData() async {
+  Future<void> _submitRelay() async {
+    if (_relayList.isEmpty || relays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("هیچ رله‌ای برای تغییر وجود ندارد")),
+      );
+      return;
+    }
+
+    bool hasChange = false;
+    for (int i = 0; i < relays.length; i++) {
+      if (i < _relayList.length &&
+          relays[i] != (_relayList[i].state ?? false)) {
+        hasChange = true;
+        break;
+      }
+    }
+
+    if (!hasChange) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("هیچ تغییری انجام نشده است")),
+      );
+      return;
+    }
+
     setState(() => _saveIsSubmitting = true);
-    await Future.delayed(const Duration(seconds: 2));
+    final prefs = await SharedPreferences.getInstance();
+    final selectedDeviceIdentifier = prefs.getString(
+      'selected_device_identifier',
+    );
+
+    if (selectedDeviceIdentifier == null) {
+      _showDialog(context, 'خطا', 'لطفاً یک دستگاه انتخاب کنید.');
+      setState(() => _saveIsSubmitting = false);
+      return;
+    }
+
+    final now = DateTime.now();
+    final miladiDate =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final jalaliNow = now.toJalali();
+    final shamsiTime =
+        "${jalaliNow.hour.toString().padLeft(2, '0')}:${jalaliNow.minute.toString().padLeft(2, '0')}:${jalaliNow.second.toString().padLeft(2, '0')}";
+
+    final body = {
+      "deviceId": selectedDeviceIdentifier,
+      "timeStampDate": miladiDate,
+      "timeStampClock": shamsiTime,
+      for (int i = 0; i < relays.length; i++) "r${i + 1}": relays[i].toString(),
+    };
+
+    final result = await ApiService.postRequest('set_relay', body);
     setState(() => _saveIsSubmitting = false);
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("داده‌ها ثبت شد")));
+    if (result['data'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("درخواست تغییر چراغ‌ها ثبت شد")),
+      );
+      if (mounted) Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("درخواست تغییر چراغ‌ها با مشکل مواجه شد")),
+      );
+    }
   }
 
   @override
@@ -244,9 +296,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: "بروزرسانی",
-            onPressed: () async {
-              await _fetchAndSaveDeviceData();
-            },
+            onPressed: _fetchAndSaveDeviceData,
           ),
         ],
       ),
@@ -271,13 +321,30 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
                             style: TextStyle(color: Colors.grey),
                           ),
                         )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: List.generate(
-                            tanks.length,
-                            (i) => _buildTankCircle("مخزن ${i + 1}", tanks[i]),
+                      : SizedBox(
+                          height: 180,
+                          child: Center(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: List.generate(
+                                  tanks.length,
+                                  (i) => Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                    ),
+                                    child: _buildTankCircle(
+                                      "مخزن ${i + 1}",
+                                      tanks[i],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
+
                   const SizedBox(height: 24),
 
                   // ====== بخش چراغ‌ها ======
@@ -299,6 +366,7 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
                             (index) => _buildRelayTile(index),
                           ),
                         ),
+
                   const SizedBox(height: 24),
 
                   // ====== دکمه‌ها ======
@@ -310,12 +378,9 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
                         child: const Text('انصراف'),
                       ),
                       ElevatedButton(
-                        // فقط وقتی رله‌ها موجود هستند، دکمه فعال شود
-                        onPressed: _relayList.isEmpty
+                        onPressed: _relayList.isEmpty || _saveIsSubmitting
                             ? null
-                            : _saveIsSubmitting
-                            ? null
-                            : _submitData,
+                            : _submitRelay,
                         child: _saveIsSubmitting
                             ? const SizedBox(
                                 width: 24,

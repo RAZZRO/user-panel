@@ -4,6 +4,9 @@ import 'package:user_panel/models/Information_model.dart';
 import 'package:user_panel/services/api_service.dart';
 import 'package:user_panel/services/sqlite_database.dart';
 import 'package:user_panel/widgets/rtu_information.dart';
+import 'package:shamsi_date/shamsi_date.dart';
+import 'package:user_panel/widgets/custom_button.dart';
+import 'package:user_panel/services/auth_manager.dart';
 
 class RtuScreen extends StatefulWidget {
   const RtuScreen({super.key});
@@ -15,6 +18,7 @@ class RtuScreen extends StatefulWidget {
 class _RtuScreenState extends State<RtuScreen> {
   List<IrrigationData> _irrigationList = [];
   bool _isLoading = false;
+  Set<String> _isCancellIrrigationMap = {};
 
   Color _getCardColor(BuildContext context, String? mode) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -61,31 +65,59 @@ class _RtuScreenState extends State<RtuScreen> {
       setState(() => _isLoading = false);
       return;
     }
+    final now = DateTime.now(); // تاریخ و زمان فعلی به میلادی
+    final miladiDate =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final jalaliNow = now.toJalali();
+    final shamsiTime =
+        "${jalaliNow.hour.toString().padLeft(2, '0')}:${jalaliNow.minute.toString().padLeft(2, '0')}:${jalaliNow.second.toString().padLeft(2, '0')}";
 
-    final result = await ApiService.postRequest('rtu_information', {
-      'deviceId': selectedDeviceIdentifier,
-    });
+    try {
+      final result = await ApiService.postRequest('rtu_information', {
+        'deviceId': selectedDeviceIdentifier,
+        'timeStampDate': miladiDate,
+        'timeStampClock': shamsiTime,
+      });
 
-    print(result);
+      print(result);
 
-    if (result['data'] is List) {
-      final data = result['data'] as List;
-      for (final row in data) {
-        if (row['irrigation_id'] == null) continue;
-        final irrigation = IrrigationData.fromJson(row);
-        await DeviceDatabase.insertIrrigation(irrigation);
+      // const url = 'all_topics';
+      // final result = await ApiService.getRequest(url);
 
-        if (row['rtu_data_id'] == null) continue;
-        final rtu = RtuData.fromJson(row);
-        await DeviceDatabase.insertRtu(rtu);
+      if (result['success'] == true) {
+        if (result['data'] is List) {
+          final data = result['data'] as List;
+          for (final row in data) {
+            if (row['irrigation_id'] == null) continue;
+            final irrigation = IrrigationData.fromJson(row);
+            await DeviceDatabase.insertIrrigation(irrigation);
+
+            if (row['rtu_data_id'] == null) continue;
+            final rtu = RtuData.fromJson(row);
+            await DeviceDatabase.insertRtu(rtu);
+          }
+        }
+
+        await _loadStoredData();
+      } else {
+        if (!mounted) {
+          return;
+        }
+        if (result['statusCode'] == 401) {
+          AuthManager.logoutAndRedirect(context);
+        }
+        _showDialog(context, 'خطا', 'دریافت داده جدید با مشکل مواجه شد.');
       }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      _showDialog(context, 'خطا', 'خطا در ارتباط با سرور: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
-
-    await _loadStoredData();
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   Future<void> _loadStoredData() async {
@@ -108,6 +140,46 @@ class _RtuScreenState extends State<RtuScreen> {
     print("=== Irrigation Data loaded ===");
     for (var item in irrigationList) {
       print(item.toMap());
+    }
+  }
+
+  Future<void> _cancellIrrigation(String rtuId) async {
+    setState(() => _isCancellIrrigationMap.add(rtuId));
+
+    final prefs = await SharedPreferences.getInstance();
+    final selectedDeviceIdentifier = prefs.getString(
+      'selected_device_identifier',
+    );
+
+    final now = DateTime.now();
+    final miladiDate =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final jalaliNow = DateTimeExtensions(now).toJalali();
+    final shamsiTime =
+        "${jalaliNow.hour.toString().padLeft(2, '0')}:${jalaliNow.minute.toString().padLeft(2, '0')}:${jalaliNow.second.toString().padLeft(2, '0')}";
+
+    Map<String, dynamic> body = {
+      "deviceId": selectedDeviceIdentifier,
+      "rtu": rtuId,
+      "timeStampDate": miladiDate,
+      "timeStampClock": shamsiTime,
+    };
+
+    final result = await ApiService.postRequest('cancell_irrigation', body);
+
+    setState(() => _isCancellIrrigationMap.remove(rtuId));
+    if (!mounted) return;
+
+    if (result['data']) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("درخواست لغو آبیاری ثبت شد")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("درخواست لغو آبیاری با مشکل مواجه شد")),
+      );
     }
   }
 
@@ -267,23 +339,27 @@ class _RtuScreenState extends State<RtuScreen> {
                             const SizedBox(height: 12),
                             Align(
                               alignment: Alignment.centerRight,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        "آبیاری واحد ${unit.rtuId} لغو شد ❌",
-                                      ),
-                                    ),
-                                  );
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
+                              child: CustomButton(
+                                onPressed: () =>
+                                    _cancellIrrigation(unit.rtuId.toString()),
+                                isSubmitting: _isCancellIrrigationMap.contains(
+                                  unit.rtuId.toString(),
                                 ),
+                                backgroundColor: Colors.red,
+                                textColor: Colors.white,
                                 icon: const Icon(Icons.cancel),
-                                label: const Text("لغو آبیاری"),
+                                label: 'ثبت',
                               ),
+
+                              //  ElevatedButton.icon(
+                              //   onPressed: _cancellIrrigation,
+                              //   style: ElevatedButton.styleFrom(
+                              //     backgroundColor: Colors.red,
+                              //     foregroundColor: Colors.white,
+                              //   ),
+                              //   icon: const Icon(Icons.cancel),
+                              //   label: const Text("لغو آبیاری"),
+                              // ),
                             ),
                           ],
                         ],

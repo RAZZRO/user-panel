@@ -2,12 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_panel/screens/logIn_screen.dart';
+import 'package:user_panel/services/sqlite_database.dart';
 
 class AuthManager {
   static Future<void> logoutAndRedirect(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
-    await prefs.remove('selected_device_identifier');
+    await prefs.clear();
+    await DeviceDatabase.clearAllData();
+
 
     // هدایت به صفحه Login و پاک کردن تاریخچه صفحات
     Navigator.of(context).pushAndRemoveUntil(

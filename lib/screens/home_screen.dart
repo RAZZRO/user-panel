@@ -79,13 +79,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
 
     if (confirm == true) {
+      // 🧹 پاک‌سازی SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('token');
-      await prefs.setBool('isLoggedIn', false);
+      await prefs.clear();
 
-      Navigator.pushReplacement(
+      // 🧹 حذف کامل دیتابیس SQLite
+      await DeviceDatabase.clearAllData();
+
+      print('🗑 SQLite database deleted successfully.');
+
+
+      // 🔁 هدایت به صفحه ورود
+      if (!context.mounted) return;
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
       );
     }
   }
@@ -164,7 +173,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final crossAxisCount = size.width > 600 ? 5 : 3;

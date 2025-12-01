@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:shamsi_date/shamsi_date.dart';
+//import 'package:shamsi_date/shamsi_date.dart';
 import 'package:persian_datetime_picker/persian_datetime_picker.dart';
 import 'package:user_panel/widgets/custom_input_field.dart';
+import 'package:user_panel/widgets/custom_button.dart';
+import 'package:user_panel/services/api_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class IrrigationScreen extends StatefulWidget {
   const IrrigationScreen({super.key});
@@ -96,15 +99,89 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
 
     setState(() => _saveIsSubmitting = true);
 
-    await Future.delayed(const Duration(seconds: 2)); // شبیه‌سازی API
+    final prefs = await SharedPreferences.getInstance();
+    final selectedDeviceIdentifier = prefs.getString(
+      'selected_device_identifier',
+    );
+
+    if (selectedDeviceIdentifier == null) {
+      if (!mounted) return;
+      _showDialog(
+        context,
+        'خطا',
+        'لطفا یک دستگاه انتخاب کنید و مجدد تلاش کنید',
+      );
+      setState(() => _saveIsSubmitting = false);
+      return;
+    }
+    final now = DateTime.now(); // تاریخ و زمان فعلی به میلادی
+    final miladiDate =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final jalaliNow = DateTimeExtensions(now).toJalali();
+    final shamsiTime =
+        "${jalaliNow.hour.toString().padLeft(2, '0')}:${jalaliNow.minute.toString().padLeft(2, '0')}:${jalaliNow.second.toString().padLeft(2, '0')}";
+    final selectedDateStr =
+        "${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}";
+
+    final selectedTimeStr =
+        "${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}";
+
+    Map<String, dynamic> body;
+    if (isGeneral) {
+      body = {
+        "deviceId": selectedDeviceIdentifier,
+        "rule": "global",
+        "date": selectedDateStr,
+        "clock": selectedTimeStr,
+        "duration": durationController.text,
+        "timeStampDate": miladiDate,
+        "timeStampClock": shamsiTime,
+      };
+    } else {
+      body = {
+        "deviceId": selectedDeviceIdentifier,
+        "rule": "single",
+        "rtu": selectedUnit,
+        "date": selectedDateStr,
+        "clock": selectedTimeStr,
+        "duration": durationController.text,
+        "timeStampDate": miladiDate,
+        "timeStampClock": shamsiTime,
+      };
+    }
+
+    final result = await ApiService.postRequest('set_irrigation', body);
 
     setState(() => _saveIsSubmitting = false);
+    if (!mounted) return;
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("آبیاری ثبت شد")));
+    if (result['data']) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("درخواست آبیاری ثبت شد")));
 
-    Navigator.of(context).pop();
+      Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("درخواست آبیاری با مشکل مواجه شد")),
+      );
+    }
+  }
+
+  void _showDialog(BuildContext context, String title, String message) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            child: const Text('باشه'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -196,15 +273,20 @@ class _IrrigationScreenState extends State<IrrigationScreen> {
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('انصراف'),
                 ),
-                ElevatedButton(
-                  onPressed: _saveIsSubmitting ? null : _submitIrrigation,
-                  child: _saveIsSubmitting
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2.0),
-                        )
-                      : const Text('ثبت'),
+                // ElevatedButton(
+                //   onPressed: _saveIsSubmitting ? null : _submitIrrigation,
+                //   child: _saveIsSubmitting
+                //       ? const SizedBox(
+                //           width: 24,
+                //           height: 24,
+                //           child: CircularProgressIndicator(strokeWidth: 2.0),
+                //         )
+                //       : const Text('ثبت'),
+                // ),
+                CustomButton(
+                  onPressed: _submitIrrigation,
+                  isSubmitting: _saveIsSubmitting,
+                  label: 'ثبت',
                 ),
               ],
             ),

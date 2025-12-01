@@ -134,6 +134,13 @@ class DeviceDatabase {
     }
   }
 
+  static Future<void> clearAllData() async {
+    final path = join(await getDatabasesPath(), 'central_data.db');
+    await deleteDatabase(path);
+    _db = null;
+    print('🧹 All local SQLite data cleared.');
+  }
+
   /// ذخیره Device
   static Future<void> insertDevice(DeviceInfo device) async {
     final db = await database;
@@ -176,17 +183,26 @@ class DeviceDatabase {
   /// دریافت IrrigationData بر اساس deviceId
   static Future<List<IrrigationData>> getIrrigationData(int deviceId) async {
     final db = await database;
-    print('🔍 Fetching irrigation data for deviceId: $deviceId');
+    // await db.delete('irrigation_data');
 
-    final all = await db.query('irrigation_data');
-    print('📋 All irrigation_data rows: $all');
-
-    final res = await db.query(
-      'irrigation_data',
-      where: 'deviceId = ?',
-      whereArgs: [deviceId],
+    final res = await db.rawQuery(
+      '''
+    SELECT ir.*
+    FROM irrigation_data ir
+    INNER JOIN (
+      SELECT rtuId, MAX(irrigationId) AS latestId
+      FROM irrigation_data
+      WHERE deviceId = ?
+      GROUP BY rtuId
+    ) latest
+    ON ir.rtuId = latest.rtuId AND ir.irrigationId = latest.latestId
+    WHERE ir.deviceId = ?
+    ORDER BY ir.rtuId;
+  ''',
+      [deviceId, deviceId],
     );
-    print('Filtered irrigation_data rows: $res');
+
+    print('✅ Filtered latest irrigation_data rows by unique rtuId: $res');
 
     return res.map((e) => IrrigationData.fromMap(e)).toList();
   }
@@ -208,18 +224,33 @@ class DeviceDatabase {
   /// دریافت RtuData
   static Future<List<RtuData>> getRtuData(int deviceId) async {
     final db = await database;
-    final res = await db.query(
-      'rtu_data',
-      where: 'deviceId = ?',
-      whereArgs: [deviceId],
+
+    final res = await db.rawQuery(
+      '''
+    SELECT rd.*
+    FROM rtu_data rd
+    INNER JOIN (
+      SELECT rtuId, MAX(rtuDataId) AS maxId
+      FROM rtu_data
+      WHERE deviceId = ?
+      GROUP BY rtuId
+    ) grouped ON rd.rtuId = grouped.rtuId AND rd.rtuDataId = grouped.maxId
+    WHERE rd.deviceId = ?
+    ORDER BY rd.rtuId;
+  ''',
+      [deviceId, deviceId],
     );
-    print('Filtered rtu_data rows: $res');
+
+    print('Filtered latest unique rtu_data rows by rtuId: $res');
+
     return res.map((e) => RtuData.fromMap(e)).toList();
   }
 
   /// ذخیره StackData
   static Future<void> insertStack(StackData data) async {
     final db = await database;
+    //await db.delete('stack_data');
+
     final id = await db.insert(
       'stack_data',
       data.toMap(),
@@ -234,18 +265,33 @@ class DeviceDatabase {
   /// دریافت StackData
   static Future<List<StackData>> getStackData(int deviceId) async {
     final db = await database;
-    final res = await db.query(
-      'stack_data',
-      where: 'deviceId = ?',
-      whereArgs: [deviceId],
+
+    final res = await db.rawQuery(
+      '''
+    SELECT sd.*
+    FROM stack_data sd
+    INNER JOIN (
+      SELECT tankId, MAX(stackDataId) AS maxId
+      FROM stack_data
+      WHERE deviceId = ?
+      GROUP BY tankId
+    ) grouped ON sd.tankId = grouped.tankId AND sd.stackDataId = grouped.maxId
+    WHERE sd.deviceId = ?
+    ORDER BY sd.tankId;
+    ''',
+      [deviceId, deviceId],
     );
-    print('Filtered stack_data rows: $res');
+
+    print('Latest stack_data rows by stackDataId: $res');
+
     return res.map((e) => StackData.fromMap(e)).toList();
   }
 
   /// ذخیره RelayData
   static Future<void> insertRelay(RelayData data) async {
     final db = await database;
+    //await db.delete('relay_data');
+
     final id = await db.insert(
       'relay_data',
       data.toMap(),
@@ -260,12 +306,21 @@ class DeviceDatabase {
   /// دریافت RelayData
   static Future<List<RelayData>> getRelayData(int deviceId) async {
     final db = await database;
-    final res = await db.query(
-      'relay_data',
-      where: 'deviceId = ?',
-      whereArgs: [deviceId],
+
+    final res = await db.rawQuery(
+      '''
+    SELECT *
+    FROM relay_data
+    WHERE deviceId = ?
+    GROUP BY relayId
+    HAVING MAX(relayDataId)
+    ORDER BY relayId;
+    ''',
+      [deviceId],
     );
-    print('Filtered relay_data rows: $res');
+
+    print('Filtered latest relay_data rows by relayDataId: $res');
+
     return res.map((e) => RelayData.fromMap(e)).toList();
   }
 }
