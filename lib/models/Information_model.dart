@@ -392,9 +392,9 @@ class RelayData {
         ? int.parse(json['relay_id'])
         : json['relay_id'];
 
-    int deviceId = json['stack_device_id'] is String
-        ? int.parse(json['stack_device_id'])
-        : json['stack_device_id'];
+    int deviceId = json['relay_device_id'] is String
+        ? int.parse(json['relay_device_id'])
+        : json['relay_device_id'];
 
     int? relayId = json['relay_relay_id'] == null
         ? null

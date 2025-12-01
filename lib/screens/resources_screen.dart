@@ -136,19 +136,29 @@ class _ResourcesScreenState extends State<ResourcesScreen> {
         'timeStampDate': miladiDate,
         'timeStampClock': shamsiTime,
       });
+      print(result);
 
       if (result['success'] == true) {
-        if (result['data'] is List) {
-          final data = result['data'] as List;
-          for (final row in data) {
-            if (row['stack_id'] != null) {
-              final stack = StackData.fromJson(row);
-              await DeviceDatabase.insertStack(stack);
-            }
-            if (row['relay_id'] != null) {
-              final relay = RelayData.fromJson(row);
-              await DeviceDatabase.insertRelay(relay);
-            }
+        print("success true");
+        // ابتدا مطمئن شو data Map است
+        final data = result['data'] as Map<String, dynamic>?;
+
+        if (data != null) {
+          // ذخیره stack ها
+          final stacks = data['stacks'] as List<dynamic>? ?? [];
+          print(stacks);
+          for (final row in stacks) {
+            print("save stack: $row");
+            final stack = StackData.fromJson(row as Map<String, dynamic>);
+            await DeviceDatabase.insertStack(stack);
+          }
+
+          // ذخیره relay ها
+          final relays = data['relays'] as List<dynamic>? ?? [];
+          for (final row in relays) {
+            print("save relay: $row");
+            final relay = RelayData.fromJson(row as Map<String, dynamic>);
+            await DeviceDatabase.insertRelay(relay);
           }
         }
 

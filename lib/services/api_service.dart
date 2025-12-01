@@ -6,8 +6,8 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  //static const String baseUrl = 'http://192.168.200.166:3000/user/';
-  static const String baseUrl = 'http://78.38.35.193:3000/user/';
+  static const String baseUrl = 'http://192.168.200.166:3000/user/';
+  //static const String baseUrl = 'http://78.38.35.193:3000/user/';
 
   static Future<Map<String, dynamic>> login(
     String endpoint,
